@@ -1,0 +1,16 @@
+{
+  "name": "windows-paint-clone",
+  "private": true,
+  "version": "1.0.0",
+  "description": "A miniature MS Paint clone built with TypeScript and the HTML5 Canvas API.",
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "tsc && vite build",
+    "preview": "vite preview"
+  },
+  "devDependencies": {
+    "typescript": "^5.5.3",
+    "vite": "^5.4.0"
+  }
+}

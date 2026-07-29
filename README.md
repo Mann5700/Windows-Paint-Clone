@@ -1,8 +1,8 @@
 # 🎨 Windows Paint Clone
 
-A miniature clone of **Microsoft Paint** built with **Java Swing / AWT**. Draw freehand with the
-mouse, switch colors, change brush thickness, erase, clear the canvas, and export your artwork as a
-PNG image.
+A miniature clone of **Microsoft Paint** built with **TypeScript** and the **HTML5 Canvas API**,
+bundled with **Vite**. Draw freehand with the mouse (or a stylus/touch via Pointer Events), switch
+colors, change brush thickness, erase, clear the canvas, and export your artwork as a PNG image.
 
 ![Sample drawing](image.png)
 
@@ -10,69 +10,73 @@ PNG image.
 
 ## ✨ Features
 
-- ✏️ **Freehand drawing** by clicking and dragging the mouse
-- 🎨 **Colors**: Red, Green, Blue
-- 🩹 **Eraser** (paints in white)
+- ✏️ **Freehand drawing** by pressing and dragging on the canvas
+- 🎨 **Colors**: Red, Green, Blue, Black
+- 🩹 **Eraser** (paints in the background color)
 - 🖌️ **Brush sizes**: Small (1px), Medium (5px), Large (12px)
 - 🧽 **Clear** the whole canvas
-- 💾 **Save** your drawing to `image.png`
-- 🪄 Anti‑aliased strokes for smooth lines
+- 💾 **Save** your drawing as a downloaded `image.png`
+- 🪄 Smooth, anti‑aliased strokes via rounded line caps/joins
+- 🖱️ **Pointer Events** — works with mouse, touch and stylus
 
 ---
 
 ## 🏗️ Architecture
 
-The app is composed of two classes: the `PaintClone` window (frame + toolbar of buttons) and the
-`DrawPanel` canvas that captures mouse events and renders to an off‑screen image buffer.
+The app is split into a typed canvas engine and a toolbar builder. `PaintApp` owns the `<canvas>`
+and all drawing state; `buildToolbar` generates the buttons from a config array and wires each one
+to a method on the engine.
 
 ```mermaid
 flowchart TD
-    subgraph Frame["PaintClone (JFrame)"]
+    subgraph Page["index.html"]
         direction TB
-        DP["DrawPanel — drawing canvas (CENTER)"]
-        BP["Button Panel (SOUTH)"]
+        TB["#toolbar (buttons)"]
+        CV["#board (canvas)"]
     end
-    BP --> C1["Red / Green / Blue"]
-    BP --> C2["Eraser (white)"]
-    BP --> C3["Small / Medium / Large brush"]
-    BP --> C4["Clear"]
-    BP --> C5["Save"]
-    User((🧑 User)) -- "mouse drag" --> DP
-    DP -- "drawLine(prev → curr)" --> IMG[("Off-screen Image buffer")]
-    IMG -- "render to screen" --> DP
-    C5 -- "ImageIO.write PNG" --> FILE[("image.png")]
+    Main["main.ts — bootstrap"] --> Paint["PaintApp (canvas engine)"]
+    Main --> Build["buildToolbar(container, paint)"]
+    Build --> TB
+    User((🧑 User)) -- "pointer drag" --> CV
+    CV -- "pointer events" --> Paint
+    Paint -- "stroke() → lineTo" --> CTX[("CanvasRenderingContext2D")]
+    Build -- "Save → toDataURL('image/png')" --> FILE[("image.png download")]
 ```
 
 ---
 
 ## 🖱️ How Drawing Works
 
-Drawing is driven by mouse events. On **press**, the panel records the starting point; on **drag**,
-it draws a line segment from the previous point to the current point and repaints.
+Drawing is driven by pointer events. On **pointerdown** the engine records the starting point; on
+**pointermove** it draws a line segment from the previous point to the current point; **pointerup**
+ends the stroke.
 
 ```mermaid
 sequenceDiagram
     actor User
-    participant DP as DrawPanel
-    participant G as Graphics2D buffer
-    User->>DP: mousePressed
-    DP->>DP: store prevX, prevY
-    User->>DP: mouseDragged
-    DP->>G: drawLine(prevX, prevY, currX, currY)
-    DP->>DP: repaint()
-    DP->>DP: prevX, prevY = currX, currY
-    Note over DP,G: Repeats for every drag event, forming a continuous line
+    participant CV as Canvas
+    participant P as PaintApp
+    participant CTX as Context2D
+    User->>CV: pointerdown
+    CV->>P: store last = {x, y}
+    User->>CV: pointermove
+    CV->>P: point = position(event)
+    P->>CTX: moveTo(last) → lineTo(point) → stroke()
+    P->>P: last = point
+    User->>CV: pointerup
+    CV->>P: drawing = false
+    Note over P,CTX: Segments chain into one continuous freehand line
 ```
 
-### Toolbar → Canvas actions
+### Toolbar → Engine actions
 
 ```mermaid
 flowchart LR
-    B1[Color button] --> S1["g2D.setPaint(color)"]
-    B2[Brush button] --> S2["g2D.setStroke(new BasicStroke(size))"]
-    B3[Eraser] --> S3["setPaint(white)"]
-    B4[Clear] --> S4["fill canvas white + reset stroke"]
-    B5[Save] --> S5["BufferedImage → ImageIO.write('image.png')"]
+    B1[Color button] --> S1["paint.setColor(hex)"]
+    B2[Brush button] --> S2["paint.setBrushSize(px)"]
+    B3[Eraser] --> S3["paint.useEraser()"]
+    B4[Clear] --> S4["paint.clear() — fill background"]
+    B5[Save] --> S5["paint.save() — canvas.toDataURL → download"]
 ```
 
 ---
@@ -80,20 +84,25 @@ flowchart LR
 ## 🚀 Getting Started
 
 ### Prerequisites
-- **JDK 8+** (uses lambda listeners, so Java 8 or newer)
+- **Node.js 18+** and npm (`node -v` to check)
 
-### Run it
-Open in **IntelliJ IDEA** (an `.iml` file is included) and run `PaintClone.main()`, or from the
-command line:
+### Install & run
 
 ```bash
 # from the repository root
-javac -d out src/PaintClone.java
-java -cp out PaintClone
+npm install
+npm run dev       # start the Vite dev server → http://localhost:5173
 ```
 
-A 500×460 window opens. Pick a color/brush and start drawing. Click **Save** to write `image.png`
-to the working directory.
+### Build for production
+
+```bash
+npm run build     # type-check + bundle to dist/
+npm run preview   # preview the production build locally
+```
+
+An 800×520 canvas opens with the toolbar above it. Pick a color/brush and start drawing. Click
+**Save** to download `image.png`.
 
 ---
 
@@ -101,27 +110,37 @@ to the working directory.
 
 ```
 Windows-Paint-Clone/
-├── src/
-│   └── PaintClone.java   # PaintClone (JFrame) + DrawPanel (canvas)
-├── image.png             # Example / last saved drawing
-├── .gitignore
-└── Paint Clone.iml       # IntelliJ IDEA module file
+├── index.html           # Canvas + toolbar mount points
+├── package.json         # Scripts & dev dependencies
+├── tsconfig.json        # TypeScript config
+├── vite.config.ts       # Vite build config
+├── image.png            # Sample drawing (shown above)
+└── src/
+    ├── main.ts          # Bootstrap: find mounts, wire engine + toolbar
+    ├── PaintApp.ts      # Canvas engine: strokes, tools, clear, save
+    ├── toolbar.ts       # Builds toolbar buttons from config
+    ├── types.ts         # Tool, Point, ColorSwatch, BrushPreset
+    └── style.css        # Toolbar + canvas styling
 ```
 
-| Class | Responsibility |
-|-------|----------------|
-| `PaintClone` | Builds the window, toolbar buttons, and wires up listeners |
-| `DrawPanel` | Captures mouse events, draws to an off‑screen buffer, handles clear/save |
+---
+
+## 🧰 Tech Stack
+
+- **TypeScript** — typed canvas engine and toolbar wiring
+- **HTML5 Canvas API** — the drawing surface (`CanvasRenderingContext2D`)
+- **Pointer Events** — unified mouse / touch / stylus input
+- **Vite** — dev server and production bundling
 
 ---
 
 ## 💡 Possible Enhancements
-- A full color picker (`JColorChooser`) instead of three fixed colors
 - Undo / redo history
 - Shape tools (line, rectangle, ellipse) and adjustable canvas size
-- "Save As…" dialog so the file name/location can be chosen
+- A native color picker (`<input type="color">`) for unlimited colors
+- "Save As…" with a chosen file name/location
 
 ---
 
-> Built to explore custom painting in Swing: mouse listeners, `Graphics2D`, off‑screen image
-> buffers, and exporting a `BufferedImage` with `ImageIO`.
+> Built to explore the HTML5 Canvas API in TypeScript: pointer input, off-screen-free direct
+> rendering, and exporting a canvas to PNG via `toDataURL`.
